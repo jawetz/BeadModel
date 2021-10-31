@@ -118,8 +118,8 @@ def point_contact(vars, contact_forces):
     for force in contact_forces:
         sum_x += force.mag * np.cos(force.ang)
         sum_y += force.mag * np.sin(force.ang)
-    eq1 = sum_x + x * np.cos(contact_forces[5].ang) + y * np.cos(contact_forces[6].ang)
-    eq2 = sum_y + x * np.sin(contact_forces[5].ang) + y * np.sin(contact_forces[6].ang)
+    eq1 = sum_x + x * np.cos(contact_forces[-2].ang) + y * np.cos(contact_forces[-1].ang)
+    eq2 = sum_y + x * np.sin(contact_forces[-2].ang) + y * np.sin(contact_forces[-1].ang)
     return eq1, eq2
 
 
@@ -130,8 +130,8 @@ def two_point_contact(vars, contact_forces):
     for force in contact_forces:
         sum_x += force.mag * np.cos(force.ang)
         sum_y += force.mag * np.sin(force.ang)
-    eq1 = sum_x + x * np.cos(contact_forces[5].ang) + y * np.cos(contact_forces[6].ang)
-    eq2 = sum_y + x * np.sin(contact_forces[5].ang) + y * np.sin(contact_forces[6].ang)
+    eq1 = sum_x + x * np.cos(contact_forces[-2].ang) + y * np.cos(contact_forces[-1].ang)
+    eq2 = sum_y + x * np.sin(contact_forces[-2].ang) + y * np.sin(contact_forces[-1].ang)
     return eq1, eq2
 
 #for surface contact
@@ -151,7 +151,7 @@ def bot_eqn(vars, z, surface_force):
 #parameters (all SI units)
 n = 100
 param_sweep=1 #for making pretty graphs, running several parameters at once
-n_iters = 18 #length of inner for loop
+n_iters = 100 #length of inner for loop
 n_beads = 6
 bead_len = 1  #for when beads are in one segment
 R=0.0075        #outer radius
@@ -161,7 +161,7 @@ ys=145.58       #youngs modulus*area
 tot_len=(n_beads+1)*w_b+0.29  #total length of the string (including the part behind the beads)
 k = ys/tot_len  #spring constant
 print(k)
-delt = 0.00       #initial displacement
+delt = 0.003       #initial displacement
 thtb=np.pi/6        #bead angle
 mu = 0.9            #friction coefficient
 w = bead_len * w_b  #length of single bead
@@ -222,7 +222,7 @@ def main():
             contact_type[n_beads - 1 - i] = 'surface'
         for m in range(n_iters):
             global F
-            F=m*0.01            #applied force
+            F=m*0.008            #applied force
        #initial bead interface
             # disp_ini = np.random.random_sample(n_beads) * 0.001
             beads[0] = Bead([0, 0], 0, 0, w_b, R, r, thtb)  #fixed bead
@@ -578,7 +578,7 @@ def main():
                         left_force_1 = forces_norm
                         left_force_2 = forces_fric
                     for p in range(n_beads - 1):
-                        if tht_ini[p] > tht_ini[p + 1]:
+                        if tht_ini[p] > tht_ini[p + 1]-0.001:
                             tht_ini[p + 1] = tht_ini[p]
                             disp_ini[p + 1] = 0
                             contact_type[p + 1] = 'surface'
@@ -599,6 +599,8 @@ def main():
                     all_forces.append(left_force_2)
                     all_forces.append(gravity)
                 progress+=1
+                if progress>1000:
+                    domin=0
                 if progress>=2000:          #no infinite loops
                     print(max_moment)
                     print(max_y_sum)
@@ -609,7 +611,7 @@ def main():
             if tht_ini[0]>=1.57:            #beyond this, system does not make physical sense
                 print('maxxed out')
                 print(m)
-            if m % 3 == 2 and j%2==0:
+            if m % 10 == 9 and j%2==0:
 
                 shapes = []             #for making the pictures
                 # for this bead and all beads to the right
@@ -650,13 +652,13 @@ def main():
                 fin_tht[m, i, j] = tht_ini[i]
     force=np.linspace(0,F,n_iters)
     for i in range(param_sweep):                    #displacement plot
-        plt.plot(force,fin_disp[:,0,i])
+        plt.plot(force,fin_disp[:,n_beads-1,i])
     plt.legend(['0.011','0.013','0.015','0.017','0.019'])
     plt.xlabel('Force [N]')
     plt.ylabel('displacement [m]')
     plt.show()
     for i in range(param_sweep):                    #angle plot
-        plt.plot(force,fin_tht[:,0,i])
+        plt.plot(force,fin_tht[:,n_beads-1,i])
     plt.legend(['0.011','0.013','0.015','0.017','0.019'])
     plt.xlabel('Force [N]')
     plt.ylabel('Angular displacement [radians]')

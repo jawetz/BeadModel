@@ -51,10 +51,10 @@ parser.add_argument('--n_beads', type=int, default=10, help='number of non-fixed
 parser.add_argument('--R', type=float, default=0.0075, help='outer radius')
 parser.add_argument('--r', type=float, default=0.0001, help='inner bead radius')
 parser.add_argument('--w', type=float, default=0.015, help='bead length')
-parser.add_argument('--mis', type=float, default=np.pi/360, help='angle disparity')
+parser.add_argument('--mis', type=float, default=0, help='angle disparity')
 parser.add_argument('--ys', type=float, default=145.58, help='youngs modulus times cross-sectional area')
 parser.add_argument('--delt', type=float, default=0.003, help='initial displacement of string')
-parser.add_argument('--thtb', type=float, default= 4*np.pi / 18, help='bead angle')
+parser.add_argument('--thtb', type=float, default= 5*np.pi / 18, help='bead angle')
 parser.add_argument('--mu', type=float, default=0.1, help='friction coefficient')
 parser.add_argument('--grav_const', type=float, default=9.81, help='gravitational constant')
 parser.add_argument('--dens', type=float, default=00, help='density of the material')
@@ -74,6 +74,7 @@ tht = np.linspace(0.001, 1, args.n_iters)
 fin_tht = np.zeros((args.n_iters, args.n_beads, args.param_sweep))
 fin_disp = np.zeros((args.n_iters, args.n_beads, args.param_sweep))
 extension = np.zeros((args.n_iters, args.param_sweep))
+q_arr=np.zeros(args.n_beads)
 
 
 def main():
@@ -91,15 +92,15 @@ def main():
         disp_ini = [0.00] * args.n_beads
         disp_ini[0] = max_disp(tht_ini[0], args)
         for i in range(args.n_beads):
-            contact_type[args.n_beads - 1 - i] = 'two'
-        contact_type[0] = 'two'
+            contact_type[args.n_beads - 1 - i] = 'surface'
+        contact_type[0] = 'surface'
         finit = False
         for m in range(args.n_iters):
             global F
             F = m / args.n_iters * 6  # applied force
             # initial bead interface
             # disp_ini = np.random.random_sample(args.n_beads) * 0.001
-            beads[0] = Bead([0, 0], 0, 0, 0.015, args.R, args.r, args.thtb,args.mis)  # fixed bead
+            beads[0] = Bead([0, 0], 0, 0, 0.015, args.R, args.r, args.thtb)  # fixed bead
             moment = np.ones(args.n_beads)
             y_sum = np.ones(args.n_beads)
             progress = 0
@@ -118,7 +119,7 @@ def main():
 
                 for i in range(1, args.n_beads + 1):
                     new_pos = bead_pos(beads[i - 1], tht_ini[i - 1], disp_ini[i - 1], args)  # adds beads to the system
-                    new_bead = Bead(new_pos, tht_ini[i - 1], disp_ini[i - 1], args.w, args.R, args.r, args.thtb,args.mis)
+                    new_bead = Bead(new_pos, tht_ini[i - 1], disp_ini[i - 1], args.w, args.R, args.r, args.thtb)
                     beads[i] = new_bead
 
                 # initialize string points
@@ -271,7 +272,62 @@ def main():
                     contact_forces.append(gravity)
 
                     # types of contact
-                    if contact_type[args.n_beads - i - 1] == 'two':
+                    if contact_type[args.n_beads - i - 1] == 'surface':
+                        # contact surface
+                        surface_top = Force(bead.A[0], bead.A[1],
+                                            0, np.pi / 2 - args.thtb - bead.theta)  # equivalent surface force
+                        if args.thtb < np.pi / 4:
+                            surface_bot = Force(beads[args.n_beads - i - 1].pos[0], beads[args.n_beads - i - 1].pos[1],
+                                                0,
+                                                args.thtb - np.pi / 2 - bead.theta)  # equivalent surface force bottom
+                        else:
+                            surface_bot = Force(beads[args.n_beads - i - 1].pos[0], beads[args.n_beads - i - 1].pos[1],
+                                                0,
+                                                args.thtb - np.pi / 2 - bead.theta)  # equivalent surface force bottom
+                        contact_forces.append(surface_top)
+                        contact_forces.append(surface_bot)
+                        x, y = fsolve(surface_contact, (1, 1), contact_forces)  # solves for force magnitudes
+
+                        mome = 0
+                        for force in contact_forces[0:6]:
+                            mome += -force.mag * np.cos(force.ang) * (force.ypos - bead.E[1]) + force.mag * (
+                                        force.xpos - bead.E[0]) * np.sin(force.ang)
+                        surface_top.mag = x
+                        surface_bot.mag = y
+                        q = fsolve(positioning, (.001), (mome, surface_top, surface_bot, bead))
+                        q = q[0]
+                        q_arr[args.n_beads-i-1]=q
+                        if q > d:
+                            surface_top.xpos = beads[args.n_beads - i - 1].pos[0]
+                            surface_top.ypos = beads[args.n_beads - i - 1].pos[1]
+                            surface_bot.xpos = bead.G[0]
+                            surface_bot.ypos = bead.G[1]
+                            surface_top.mag = 0
+                            surface_bot.mag = 0
+                            s, t, u = fsolve(friction, (x, y, 0.1), (contact_forces, bead, args))
+                            surface_top.mag = s
+                            surface_bot.mag = t
+                            if u > np.arctan(args.mu):
+                                u = np.arctan(args.mu)
+                            surface_top.ang += u
+                            if args.thtb >= np.pi / 4:
+                                surface_bot.ang += u
+                            else:
+                                surface_bot.ang -= u
+                        else:
+                            surface_top.xpos += q * np.cos(args.thtb + bead.theta)
+                            surface_top.ypos -= q * np.sin(args.thtb + bead.theta)
+                            surface_bot.xpos -= q * np.cos(args.thtb - bead.theta)
+                            surface_bot.ypos -= q * np.sin(args.thtb - bead.theta)
+                        for force in contact_forces:  # force sums
+                            moment[args.n_beads - i - 1] += -force.mag * np.cos(force.ang) * (
+                                        force.ypos - bead.E[1]) + force.mag * (force.xpos - bead.E[0]) * np.sin(
+                                force.ang)
+                            y_sum[args.n_beads - i - 1] += force.mag * np.sin(force.ang)
+
+                        left_force_1 = surface_top  # prepares the next bead
+                        left_force_2 = surface_bot
+                    elif contact_type[args.n_beads - i - 1] == 'two':
                         # 2 contact points
                         if disp_ini[args.n_beads - i - 1] >= 0:  # contact point is different if disp is negative
                             force_top = Force(beads[args.n_beads - i].A[0], beads[args.n_beads - i].A[1], 0,
@@ -417,20 +473,20 @@ def main():
                     '''''''''''''''''''''''''''''''''''''''
                     if s == args.n_beads - 1:
                         if tht_ini[0] <= 0:
-                            contact_type[0] = 'two'
+                            contact_type[0] = 'surface'
                     else:
                         if tht_ini[args.n_beads - s - 1] <= tht_ini[args.n_beads - s - 2]:
-                            contact_type[args.n_beads - s - 1] = 'two'
+                            contact_type[args.n_beads - s - 1] = 'surface'
                             tht_ini[args.n_beads - s - 1] = tht_ini[args.n_beads - s - 2]
                             disp_ini[args.n_beads - s - 1] = 0
                 for s in range(args.n_beads - 1):
                     if tht_ini[s] >= tht_ini[s + 1]:
                         tht_ini[s + 1] = tht_ini[s]
-                        contact_type[s + 1] = "two"
+                        contact_type[s + 1] = "surface"
 
 
                 progress += 1
-                if progress >= 1000:  # no infinite loops
+                if progress >= 500:  # no infinite loops
                     print(moment)
                     print(y_sum)
                     print(tht_ini)
@@ -486,7 +542,7 @@ def main():
                 plt.plot(string_arr[:, 0], string_arr[:, 1], color='red')
                 plt.show()
             exte = (args.R - beads[args.n_beads].B[1])  # plots the vertical displacement of the top right corner of the rightmost bead
-            extension[m, j] = exte * 800
+            extension[m, j] = exte * 1000
             for i in range(args.n_beads):
                 fin_disp[m, i, j] = disp_ini[i]  # collects data for graphs
                 fin_tht[m, i, j] = tht_ini[i]
@@ -530,12 +586,12 @@ def main():
     forty=pandas.read_csv(r"40deg_10_50_90_120N").to_numpy()
     thirty=pandas.read_csv(r"30deg_10_50_90_120N").to_numpy()
     #plt.plot(seventy[:, 0], seventy[:, 1])
-    #plt.plot(fifty[:,0],fifty[:,1])
-    #plt.plot(fifty[:,2],fifty[:,3])
-    #plt.plot(fifty[:,4],fifty[:,5])
-    plt.plot(forty[:,0],forty[:,1])
-    plt.plot(forty[:,2],forty[:,3])
-    plt.plot(forty[:,4],forty[:,5])
+    plt.plot(fifty[:,0],fifty[:,1])
+    plt.plot(fifty[:,2],fifty[:,3])
+    plt.plot(fifty[:,4],fifty[:,5])
+    #plt.plot(forty[:,0],forty[:,1])
+    #plt.plot(forty[:,2],forty[:,3])
+    #plt.plot(forty[:,4],forty[:,5])
     #plt.plot(thirty[:,0],thirty[:,1])
     #plt.plot(thirty[:,2],thirty[:,3])
     #plt.plot(thirty[:,4],thirty[:,5])
@@ -555,7 +611,7 @@ def main():
         for i in range(m):
             adj_ext[i]=extension[i,j]-extension[0,j]
     for i in range(args.param_sweep):  # extension plot
-        plt.plot(extension[:, i]-extension[0,i], (force))
+        plt.plot(extension[:, i]-extension[4,i], (force-force[4]))
     plt.ylabel('Force [N]')
     plt.xlabel('Vertical displacement [mm]')
     plt.xlim([-0.1, 25])

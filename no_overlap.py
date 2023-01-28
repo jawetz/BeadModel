@@ -10,18 +10,23 @@ def max_disp(ang,args):
     elif ang == 0:
         return 0
     else:
-        disp=(2*args.R*(np.cos(ang)+np.sin(ang)*np.tan(args.thtb)-1))/(np.sin(args.thtb-args.mis-ang)+np.cos(args.thtb-args.mis-ang)*np.tan(args.thtb))
+        disp = d - np.sin(ang3) * d / np.sin(2 * args.thtb)
     return disp
 
 
 
 #ensures the beads dont overlap
 def min_ang(disp,args):
-    d = (args.R) / np.sin(args.thtb-args.mis)  # length of angled side
+    d = (args.R) / np.sin(args.thtb)  # length of angled side
     if disp ==0:
         return 0
     if d<disp:
         print(disp)
+    if np.abs((d-disp)*np.sin(2*args.thtb)/d) >=1:
+        return np.pi/2 - 2*args.thtb
     else:
-        tht = np.atan((d * np.sin(args.thtb - args.mis)) / (d - disp-d*np.cos(args.thtb-args.mis)))
-        return tht-args.thtb
+        ang3 = np.arcsin((d - disp) * np.sin(2 * args.thtb) / d)
+    if (np.sin(2*args.thtb) < (d-disp)/d) and args.thtb<=np.pi/4:
+        return np.abs(2 * args.thtb - ang3)
+    else:
+        return np.pi-2 * args.thtb - ang3

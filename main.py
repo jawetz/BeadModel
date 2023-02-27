@@ -15,35 +15,8 @@ from k_calc import k_calc
 import argparse
 
 
-def init():
-    shapes.set_data([], [])
-    return shapes
 
-
-def animate(i):
-    shapes = []  # for making the pictures
-    # for this bead and all beads to the right
-    # add displacement, angle around the contact point
-    beads[0] = Bead([0, 0], 0, 0, 0.015, args.R, args.r, args.thtb,args.mis)
-    for j in range(args.n_beads):
-        new_pos = bead_pos(beads[j], fin_tht[i, j, 0], fin_disp[i, j, 0], args)  # adds beads to the system
-        new_bead = Bead(new_pos, fin_tht[i, j, 0], fin_disp[i, j, 0], args.w, args.R, args.r, args.thtb,args.mis)
-        beads[j + 1] = new_bead
-    for bead in beads:
-        top = [bead.A, bead.B, bead.D, bead.C]
-        bot = [bead.E, bead.F, bead.H, bead.G]
-        top_poly = plt.Polygon(top)
-        bot_poly = plt.Polygon(bot)
-        shapes.append(top_poly)
-        shapes.append(bot_poly)  # makes a list of shapes
-
-    for shape in shapes:
-        plt.gca().add_patch(shape)  # plots shapes
-    plt.xlim([-0.05, 0.1])
-    plt.ylim([-0.06, 0.03])
-    return shapes
-
-
+# parameters of the model
 parser = argparse.ArgumentParser(description='Bead Model')
 parser.add_argument('--n_iters', type=int, default=100, help='granularity of simulation')
 parser.add_argument('--param_sweep', type=int, default=3, help='for varying parameters across trials')
@@ -54,12 +27,14 @@ parser.add_argument('--w', type=float, default=0.015, help='bead length')
 parser.add_argument('--mis', type=float, default=0, help='angle disparity')
 parser.add_argument('--ys', type=float, default=145.58, help='youngs modulus times cross-sectional area')
 parser.add_argument('--delt', type=float, default=0.003, help='initial displacement of string')
-parser.add_argument('--thtb', type=float, default= 5*np.pi / 18, help='bead angle')
+parser.add_argument('--thtb', type=float, default= 5*np.pi / 18, help='bead angle (radians)')
 parser.add_argument('--mu', type=float, default=0.1, help='friction coefficient')
 parser.add_argument('--grav_const', type=float, default=9.81, help='gravitational constant')
 parser.add_argument('--dens', type=float, default=00, help='density of the material')
 parser.add_argument('--tens',type=float,default=80,help='initial tension')
 args = parser.parse_args()
+
+
 steel_cable = pandas.read_csv(r"Steel_cable_test.csv").to_numpy()
 force = (float(steel_cable[2265, 2]) - float(steel_cable[2265, 1]))
 x_disp = (float(steel_cable[2265, 1]) - float(steel_cable[1532, 1]))
@@ -81,7 +56,11 @@ def main():
     # initialize beads
     for j in range(args.param_sweep):
         contact_type = np.empty(args.n_beads, dtype=np.dtype('U100'))
-        args.tens=10+40*j
+
+
+        args.tens=10+40*j       # choose tensions to run tests for
+
+
         d = (args.R) / np.sin(args.thtb)  # length of angled side
         args.delt, k = k_calc(args)
         args.delt /= 1000
@@ -634,3 +613,31 @@ def main():
 
 
 main()
+
+def init():
+    shapes.set_data([], [])
+    return shapes
+
+
+def animate(i):
+    shapes = []  # for making the pictures
+    # for this bead and all beads to the right
+    # add displacement, angle around the contact point
+    beads[0] = Bead([0, 0], 0, 0, 0.015, args.R, args.r, args.thtb,args.mis)
+    for j in range(args.n_beads):
+        new_pos = bead_pos(beads[j], fin_tht[i, j, 0], fin_disp[i, j, 0], args)  # adds beads to the system
+        new_bead = Bead(new_pos, fin_tht[i, j, 0], fin_disp[i, j, 0], args.w, args.R, args.r, args.thtb,args.mis)
+        beads[j + 1] = new_bead
+    for bead in beads:
+        top = [bead.A, bead.B, bead.D, bead.C]
+        bot = [bead.E, bead.F, bead.H, bead.G]
+        top_poly = plt.Polygon(top)
+        bot_poly = plt.Polygon(bot)
+        shapes.append(top_poly)
+        shapes.append(bot_poly)  # makes a list of shapes
+
+    for shape in shapes:
+        plt.gca().add_patch(shape)  # plots shapes
+    plt.xlim([-0.05, 0.1])
+    plt.ylim([-0.06, 0.03])
+    return shapes

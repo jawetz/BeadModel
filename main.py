@@ -16,10 +16,11 @@ import argparse
 
 
 
+
 # parameters of the model
 parser = argparse.ArgumentParser(description='Bead Model')
 parser.add_argument('--n_iters', type=int, default=100, help='granularity of simulation')
-parser.add_argument('--param_sweep', type=int, default=3, help='for varying parameters across trials')
+parser.add_argument('--param_sweep', type=int, default=4, help='for varying parameters across trials')
 parser.add_argument('--n_beads', type=int, default=10, help='number of non-fixed beads in the system')
 parser.add_argument('--R', type=float, default=0.0075, help='outer radius')
 parser.add_argument('--r', type=float, default=0.0001, help='inner bead radius')
@@ -30,8 +31,8 @@ parser.add_argument('--delt', type=float, default=0.003, help='initial displacem
 parser.add_argument('--thtb', type=float, default= 5*np.pi / 18, help='bead angle (radians)')
 parser.add_argument('--mu', type=float, default=0.1, help='friction coefficient')
 parser.add_argument('--grav_const', type=float, default=9.81, help='gravitational constant')
-parser.add_argument('--dens', type=float, default=00, help='density of the material')
-parser.add_argument('--tens',type=float,default=80,help='initial tension')
+parser.add_argument('--dens', type=float, default=1000, help='density of the material')
+parser.add_argument('--tens',type=float,default=50,help='initial tension')
 args = parser.parse_args()
 
 
@@ -58,7 +59,7 @@ def main():
         contact_type = np.empty(args.n_beads, dtype=np.dtype('U100'))
 
 
-        args.tens=10+40*j       # choose tensions to run tests for
+        args.mu=0.1+0.1*j       # choose tensions to run tests for
 
 
         d = (args.R) / np.sin(args.thtb)  # length of angled side
@@ -87,7 +88,7 @@ def main():
                     np.abs(y_sum)) > 0.0005) and finit == False:  # loops until convergence
                 moment = np.zeros_like(moment)
                 y_sum = np.zeros_like(y_sum)
-                args.mu=0
+                #args.mu=0
                 for i in range(args.n_beads):
                     # must be difference of tht_ini values when more than one bead
                     if max_disp(tht_ini[i], args) < disp_ini[i]:
@@ -336,7 +337,6 @@ def main():
 
                     elif contact_type[args.n_beads - 1 - i] == 'one':
                         # one contact point
-                        args.mu=0.2
                         if disp_ini[args.n_beads - 1 - i] >= 0:
                             forces_norm = Force(beads[args.n_beads - i - 1].H[0], beads[args.n_beads - i - 1].H[1], 0,
                                                 args.thtb - np.pi / 2 - beads[
@@ -387,29 +387,48 @@ def main():
 
                 for s in range(args.n_beads):
                     for t in range(s + 1):
-                        tht_ini[args.n_beads - t - 1] -= max(min(0.05, moment[args.n_beads - s - 1]/100),
-                                                             -0.05)  # adjust angle
+                        if progress <=100:
+                            tht_ini[args.n_beads - t - 1] -= max(min(0.05, moment[args.n_beads - s - 1]/100),
+                                                                 -0.05)  # adjust angle
+                        else:
+                            tht_ini[args.n_beads - t - 1] -= max(min(0.05, moment[args.n_beads - s - 1] / 100),
+                                                                 -0.05)  # adjust angle
                         if tht_ini[args.n_beads - t - 1] < tht_ini[args.n_beads - s - 1]:
                             tht_ini[args.n_beads - t - 1] = tht_ini[args.n_beads - s - 1]
                 for s in range(args.n_beads):
                     if contact_type[args.n_beads - s - 1] == 'one':
-
-                        disp_ini[args.n_beads - s - 1] -= max(min(0.0005, y_sum[args.n_beads - s - 1] / 20000),
-                                                          -0.0005)
-
-                        tht_ini[args.n_beads - t - 1] -= max(min(0.005, moment[args.n_beads - s - 1] / 300),
-                                                             -0.005)
+                        if progress <=100:
+                            disp_ini[args.n_beads - s - 1] -= max(min(0.0005, y_sum[args.n_beads - s - 1] / 20000),
+                                                              -0.0005)
+                            tht_ini[args.n_beads - t - 1] -= max(min(0.005, moment[args.n_beads - s - 1] / 300),
+                                                                 -0.005)
+                        else:
+                            disp_ini[args.n_beads - s - 1] -= max(min(0.0005, y_sum[args.n_beads - s - 1] / 200000),
+                                                                  -0.0005)
+                            tht_ini[args.n_beads - t - 1] -= max(min(0.005, moment[args.n_beads - s - 1] / 3000),
+                                                                 -0.005)
+                        if s == args.n_beads - 1:
+                            if disp_ini[args.n_beads - s - 1] >= max_disp(tht_ini[args.n_beads - s - 1], args):
+                                disp_ini[args.n_beads - s - 1] = max_disp(tht_ini[args.n_beads - s - 1], args)
+                                contact_type[args.n_beads - s - 1] = 'two'
+                        else:
+                            if disp_ini[args.n_beads - s - 1] >= max_disp(
+                                    tht_ini[args.n_beads - s - 1] - tht_ini[args.n_beads - s - 2], args):
+                                contact_type[args.n_beads - s - 1] = 'two'
 
                     elif contact_type[args.n_beads - s - 1] == 'two':
-                        if all_forces[4+len(contact_forces)*s].mag == 0:
+
+                        if contact_forces[6].mag == 0:
                             contact_type[args.n_beads - s - 1] = 'one'
                         if s == args.n_beads - 1:
                             disp_ini[args.n_beads - s - 1] = max_disp(tht_ini[args.n_beads - s - 1], args)
                         else:
                             disp_ini[args.n_beads - s - 1] = max_disp(
                                 tht_ini[args.n_beads - s - 1] - tht_ini[args.n_beads - s - 2], args)
+
+
                     else:
-                        if y_sum[args.n_beads - s - 1] != 0:
+                        if y_sum[args.n_beads - s - 1] != 0 and args.thtb != np.pi/2:
                             contact_type[args.n_beads - s - 1] = 'two'
                             disp_ini[args.n_beads - s - 1] -= max(min(0.0005, y_sum[args.n_beads - s - 1] / 20000),
                                                                   -0.0005)
@@ -422,6 +441,11 @@ def main():
                                 tht_ini[args.n_beads - s - 1 + t] = min_ang(disp_ini[args.n_beads - s - 1 + t],
                                                                             args) + tht_ini[
                                                                         args.n_beads - s + t - 2]
+                        elif args.thtb == np.pi/2:
+                            contact_type[args.n_beads - s - 1] = 'two'
+                            asdf=0
+
+
 
                     '''''''''''''''''''''''''''''''''''''''''''''''''''
                     if s == args.n_beads - 1:  # all this to check if rotation will create one or 2 contacts
@@ -451,10 +475,10 @@ def main():
                             contact_type[args.n_beads-s-1]='two'
                     '''''''''''''''''''''''''''''''''''''''
                     if s == args.n_beads - 1:
-                        if tht_ini[0] <= 0:
+                        if tht_ini[0] <= 0 and args.thtb != np.pi/2:
                             contact_type[0] = 'surface'
                     else:
-                        if tht_ini[args.n_beads - s - 1] <= tht_ini[args.n_beads - s - 2]:
+                        if tht_ini[args.n_beads - s - 1] <= tht_ini[args.n_beads - s - 2] and args.thtb != np.pi/2:
                             contact_type[args.n_beads - s - 1] = 'surface'
                             tht_ini[args.n_beads - s - 1] = tht_ini[args.n_beads - s - 2]
                             disp_ini[args.n_beads - s - 1] = 0
@@ -476,8 +500,8 @@ def main():
                 #debugging checks
                 if m == 4:
                     m = 4
-                if m == 78:
-                    m = 78
+                if m == 48:
+                    m = 48
                 if tht_ini[args.n_beads - 1] >= 1:  # beyond this, system does not make physical sense
                     print('maxxed out')
                     print(m)
@@ -565,9 +589,9 @@ def main():
     forty=pandas.read_csv(r"40deg_10_50_90_120N").to_numpy()
     thirty=pandas.read_csv(r"30deg_10_50_90_120N").to_numpy()
     #plt.plot(seventy[:, 0], seventy[:, 1])
-    plt.plot(fifty[:,0],fifty[:,1])
-    plt.plot(fifty[:,2],fifty[:,3])
-    plt.plot(fifty[:,4],fifty[:,5])
+    #plt.plot(fifty[:,0],fifty[:,1])
+    #plt.plot(fifty[:,2],fifty[:,3])
+    #plt.plot(fifty[:,4],fifty[:,5])
     #plt.plot(forty[:,0],forty[:,1])
     #plt.plot(forty[:,2],forty[:,3])
     #plt.plot(forty[:,4],forty[:,5])
@@ -594,7 +618,7 @@ def main():
     plt.ylabel('Force [N]')
     plt.xlabel('Vertical displacement [mm]')
     plt.xlim([-0.1, 25])
-    plt.legend(['Experimental data', 'Model data'])
+    plt.legend(['mu=0.1','0.2','0.3','0.4'])
     steel_test = pandas.read_csv(r"Steel_cable_resin_beads.csv").to_numpy()
     fo = steel_test[1:2450, 2].astype('float64')
     di = steel_test[1:2450, 1].astype('float64')
@@ -611,9 +635,6 @@ def main():
 
     # ani.save(f,writer='ffmpeg')
 
-
-main()
-
 def init():
     shapes.set_data([], [])
     return shapes
@@ -623,10 +644,10 @@ def animate(i):
     shapes = []  # for making the pictures
     # for this bead and all beads to the right
     # add displacement, angle around the contact point
-    beads[0] = Bead([0, 0], 0, 0, 0.015, args.R, args.r, args.thtb,args.mis)
+    beads[0] = Bead([0, 0], 0, 0, 0.015, args.R, args.r, args.thtb)
     for j in range(args.n_beads):
         new_pos = bead_pos(beads[j], fin_tht[i, j, 0], fin_disp[i, j, 0], args)  # adds beads to the system
-        new_bead = Bead(new_pos, fin_tht[i, j, 0], fin_disp[i, j, 0], args.w, args.R, args.r, args.thtb,args.mis)
+        new_bead = Bead(new_pos, fin_tht[i, j, 0], fin_disp[i, j, 0], args.w, args.R, args.r, args.thtb)
         beads[j + 1] = new_bead
     for bead in beads:
         top = [bead.A, bead.B, bead.D, bead.C]
@@ -641,3 +662,6 @@ def animate(i):
     plt.xlim([-0.05, 0.1])
     plt.ylim([-0.06, 0.03])
     return shapes
+
+main()
+

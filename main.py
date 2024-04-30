@@ -20,15 +20,15 @@ import argparse
 # parameters of the model
 parser = argparse.ArgumentParser(description='Bead Model')
 parser.add_argument('--n_iters', type=int, default=100, help='granularity of simulation')
-parser.add_argument('--param_sweep', type=int, default=4, help='for varying parameters across trials')
+parser.add_argument('--param_sweep', type=int, default=1, help='for varying parameters across trials')
 parser.add_argument('--n_beads', type=int, default=10, help='number of non-fixed beads in the system')
 parser.add_argument('--R', type=float, default=0.0075, help='outer radius')
 parser.add_argument('--r', type=float, default=0.0001, help='inner bead radius')
 parser.add_argument('--w', type=float, default=0.015, help='bead length')
 parser.add_argument('--mis', type=float, default=0, help='angle disparity')
 parser.add_argument('--ys', type=float, default=145.58, help='youngs modulus times cross-sectional area')
-parser.add_argument('--delt', type=float, default=0.003, help='initial displacement of string')
-parser.add_argument('--thtb', type=float, default= 5*np.pi / 18, help='bead angle (radians)')
+parser.add_argument('--delt', type=float, default=0.00, help='initial displacement of string')
+parser.add_argument('--thtb', type=float, default= 4*np.pi / 18, help='bead angle (radians)')
 parser.add_argument('--mu', type=float, default=0.1, help='friction coefficient')
 parser.add_argument('--grav_const', type=float, default=9.81, help='gravitational constant')
 parser.add_argument('--dens', type=float, default=1000, help='density of the material')
@@ -58,8 +58,8 @@ def main():
     for j in range(args.param_sweep):
         contact_type = np.empty(args.n_beads, dtype=np.dtype('U100'))
 
-
-        args.mu=0.1+0.1*j       # choose tensions to run tests for
+        #args.tens=50
+        #args.tens=tens_arr[j]       # choose tensions to run tests for
 
 
         d = (args.R) / np.sin(args.thtb)  # length of angled side
@@ -67,7 +67,7 @@ def main():
         args.delt /= 1000
         print(k)
         # tht_ini_ini = np.random.random_sample(args.n_beads) / args.n_beads
-        tht_ini=[0.00]*args.n_beads
+        tht_ini=[0.01]*args.n_beads
         # disp_ini = np.random.random_sample(args.n_beads) * 0.001
         disp_ini = [0.00] * args.n_beads
         disp_ini[0] = max_disp(tht_ini[0], args)
@@ -77,7 +77,7 @@ def main():
         finit = False
         for m in range(args.n_iters):
             global F
-            F = m / args.n_iters * 6  # applied force
+            F = m / args.n_iters * 7  # applied force
             # initial bead interface
             # disp_ini = np.random.random_sample(args.n_beads) * 0.001
             beads[0] = Bead([0, 0], 0, 0, 0.015, args.R, args.r, args.thtb)  # fixed bead
@@ -391,7 +391,7 @@ def main():
                             tht_ini[args.n_beads - t - 1] -= max(min(0.05, moment[args.n_beads - s - 1]/100),
                                                                  -0.05)  # adjust angle
                         else:
-                            tht_ini[args.n_beads - t - 1] -= max(min(0.05, moment[args.n_beads - s - 1] / 100),
+                            tht_ini[args.n_beads - t - 1] -= max(min(0.05, moment[args.n_beads - s - 1] / 1000),
                                                                  -0.05)  # adjust angle
                         if tht_ini[args.n_beads - t - 1] < tht_ini[args.n_beads - s - 1]:
                             tht_ini[args.n_beads - t - 1] = tht_ini[args.n_beads - s - 1]
@@ -496,12 +496,14 @@ def main():
                     print(disp_ini)
                     print(m)
                     print(j)
+                    #if contact_type[0]=='surface':
+                    #    continue
                     break
                 #debugging checks
                 if m == 4:
                     m = 4
-                if m == 48:
-                    m = 48
+                if m == 10:
+                    m = 10
                 if tht_ini[args.n_beads - 1] >= 1:  # beyond this, system does not make physical sense
                     print('maxxed out')
                     print(m)
@@ -531,10 +533,10 @@ def main():
                     count += 1
                     if force.mag <= 1e-6:
                         continue
-                    if np.floor(count / 8) % 3 == 0:
+                    if np.mod(count,8)  == 0 or np.mod(count,8)  == 1 or np.mod(count,8)  == 4 or np.mod(count,8)  == 5:
                         bow = plt.arrow(force.xpos, force.ypos, force.mag * np.cos(force.ang) / 3000,
                                         force.mag * np.sin(force.ang) / 3000, color='black', width=0.0005)
-                    elif np.floor(count / 8) % 3 == 1:
+                    elif np.mod(count,8)  == 2 or np.mod(count,8)  == 3:
                         bow = plt.arrow(force.xpos, force.ypos, force.mag * np.cos(force.ang) / 3000,
                                         force.mag * np.sin(force.ang) / 3000, color='orange', width=0.0005)
                     else:
@@ -617,13 +619,17 @@ def main():
         plt.plot(extension[:, i]-extension[4,i], (force-force[4]))
     plt.ylabel('Force [N]')
     plt.xlabel('Vertical displacement [mm]')
-    plt.xlim([-0.1, 25])
+    plt.xlim([-0.1, 80])
     plt.legend(['mu=0.1','0.2','0.3','0.4'])
     steel_test = pandas.read_csv(r"Steel_cable_resin_beads.csv").to_numpy()
     fo = steel_test[1:2450, 2].astype('float64')
     di = steel_test[1:2450, 1].astype('float64')
     fo *= (-1)
     di *= (-1)
+    ext_net=extension[:, i]-extension[4,i]
+    for_net=force-force[4]
+    np.savetxt("ext_net.txt",ext_net)
+    np.savetxt("forc_net.txt",for_net)
     # plt.plot(di, fo)
 
     plt.show()
